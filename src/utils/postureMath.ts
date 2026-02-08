@@ -19,8 +19,13 @@ export interface PostureResult {
  * 1. Find the midpoint between shoulders (Upper Back).
  * 2. Compare Nose position relative to Shoulders (Neck Forward Tilt).
  * 3. Compare Shoulders relative to Hips (Torso Lean).
+ * 
+ * Sensitivity (1-10):
+ * - 1: Low Sensitivity (Relaxed, allows more slouching)
+ * - 5: Medium (Standard)
+ * - 10: High Sensitivity (Strict)
  */
-export function analyzePosture(landmarks: Landmark[]): PostureResult {
+export function analyzePosture(landmarks: Landmark[], sensitivity: number = 5): PostureResult {
     // 1. Extract Key Points (MediaPipe Indices)
     const nose = landmarks[0];
     const leftShoulder = landmarks[11];
@@ -71,8 +76,18 @@ export function analyzePosture(landmarks: Landmark[]): PostureResult {
     let isGood = true;
     let message = "Perfect Posture";
 
+    // Adjust Threshold based on Sensitivity
+    // Base = 15 deg.
+    // Sensitivity 1: +5 deg tolerance (20 deg limit)
+    // Sensitivity 10: -5 deg tolerance (10 deg limit)
+    // Formula: Base - (Sensitivity - 5)
+    // 1 -> 15 - (-4) = 19
+    // 5 -> 15 - 0 = 15
+    // 10 -> 15 - 5 = 10
+    const adjustedNeckLimit = POSTURE_THRESHOLDS.NECK_ANGLE_LIMIT - (sensitivity - 5);
+
     // Rule A: Tech Neck (Head is too far forward)
-    if (neckAngle > POSTURE_THRESHOLDS.NECK_ANGLE_LIMIT) {
+    if (neckAngle > adjustedNeckLimit) {
         isGood = false;
         message = "Lift Your Head!";
     }

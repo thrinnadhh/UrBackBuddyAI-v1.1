@@ -21,6 +21,12 @@ export const bridge = {
     startTracking: async () => invoke<string>("start_tracking"),
     stopTracking: async () => invoke<string>("stop_tracking"),
 
+    // --- Session Management ---
+    saveSession: async (duration: number, score: number) =>
+        invoke<string>("save_session_data", { duration, score }),
+
+    getRecentSessions: async () => invoke<SessionData[]>("get_recent_sessions"),
+
     // --- Events ---
     onPoseUpdate: (callback: (landmarks: Landmark[]) => void) => {
         return listen<Landmark[]>("pose_update", (event) => {
@@ -28,3 +34,10 @@ export const bridge = {
         });
     }
 };
+
+export interface SessionData {
+    id: number;
+    timestamp: string;
+    duration: number;
+    score: number;
+}

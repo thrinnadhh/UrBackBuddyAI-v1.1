@@ -9,7 +9,7 @@ import {
   Sun,
   Monitor, // For Midnight mode
   Activity
-} from 'lucide-react'; // Make sure to install: npm install lucide-react
+} from 'lucide-react';
 
 type Theme = 'light' | 'dark' | 'midnight';
 type View = 'dashboard' | 'analytics' | 'settings';
@@ -159,7 +159,18 @@ function App() {
           </div>
         )}
 
-        {/* VIEW 2: SETTINGS PLACEHOLDER */}
+        {/* VIEW 2: ANALYTICS (Placeholder) */}
+        {view === 'analytics' && (
+          <div className={`p-8 rounded-2xl border ${getCardClass()}`}>
+            <h3 className="text-xl font-bold mb-4">Analytics Dashboard</h3>
+            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-900/20">
+              <History size={48} className="opacity-20 mb-4" />
+              <p className="opacity-60">Session history and posture trends coming in v1.1</p>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: SETTINGS PLACEHOLDER */}
         {view === 'settings' && (
           <div className={`p-8 rounded-2xl border ${getCardClass()}`}>
             <h3 className="text-xl font-bold mb-4">Sensitivity Settings</h3>
