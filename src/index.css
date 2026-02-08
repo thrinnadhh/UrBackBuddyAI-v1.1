@@ -78,3 +78,15 @@
 ::-webkit-scrollbar-thumb {
     @apply bg-[var(--bg-card)] rounded-full border border-transparent bg-clip-content;
 }
+
+/* Midnight Theme Variables */
+.midnight {
+    --bg-primary: #050505;
+    --bg-secondary: #0a0a0a;
+    --text-primary: #e5e5e5;
+    --accent: #22c55e;
+}
+
+body {
+    transition: background-color 0.3s, color 0.3s;
+}
