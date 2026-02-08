@@ -1,0 +1,3 @@
+/* Importing Tailwind via index.css usually, but let's ensure it's loaded. 
+   Actually, Vite usually imports index.css in main.tsx. 
+   I'll overwrite this just in case to be empty or contain global styles if needed. */

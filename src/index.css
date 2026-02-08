@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+    /* Dynamic Theme Colors mapped to CSS Variables */
+    --color-background: var(--bg-app);
+    --color-surface: var(--bg-card);
+    --color-border: var(--border);
+    --color-primary: var(--color-primary);
+    --color-danger: var(--color-danger);
+
+    /* Text Colors */
+    --color-text-main: var(--text-main);
+
+    /* Retaining glass variables for now to avoid breaking existing components immediately, 
+     but mapped to simpler values if needed */
+    --color-glassBorder: var(--border);
+    --color-glass: var(--bg-card);
+    /* Fallback to solid for now */
+}
+
+:root {
+    /* Default (Light Mode) */
+    --bg-app: #f4f4f5;
+    /* Zinc 100 */
+    --bg-card: #ffffff;
+    /* White */
+    --text-main: #18181b;
+    /* Zinc 900 */
+    --border: #e4e4e7;
+    /* Zinc 200 */
+
+    --color-primary: #10b981;
+    /* Emerald */
+    --color-danger: #ef4444;
+    /* Red */
+}
+
+:root.dark {
+    /* Dark Mode (Zinc) */
+    --bg-app: #18181b;
+    /* Zinc 900 */
+    --bg-card: #27272a;
+    /* Zinc 800 */
+    --text-main: #f4f4f5;
+    /* Zinc 100 */
+    --border: #3f3f46;
+    /* Zinc 700 */
+}
+
+:root.midnight {
+    /* Midnight Mode (OLED Black) */
+    --bg-app: #000000;
+    /* Pure Black */
+    --bg-card: #09090b;
+    /* Zinc 950 */
+    --text-main: #e4e4e7;
+    /* Zinc 200 */
+    --border: #27272a;
+    /* Zinc 800 */
+}
+
+@layer base {
+    body {
+        @apply bg-background text-[var(--text-main)] antialiased transition-colors duration-200;
+    }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-[var(--bg-card)] rounded-full border border-transparent bg-clip-content;
+}
