@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { bridge } from './services/bridge';
+import { useState, useEffect, useRef } from 'react';
+import { bridge, SessionData } from './services/bridge';
 import { PoseOverlay } from './components/PoseOverlay';
 import {
   LayoutDashboard,
@@ -18,6 +18,16 @@ function App() {
   const [view, setView] = useState<View>('dashboard');
   const [theme, setTheme] = useState<Theme>('dark');
   const [isTracking, setTracking] = useState(false);
+  const [history, setHistory] = useState<SessionData[]>([]);
+  const [sensitivity, setSensitivity] = useState(5);
+  const sessionStartTimeRef = useRef<number | null>(null);
+
+  // --- DATA SYNC ---
+  useEffect(() => {
+    if (view === 'analytics') {
+      bridge.getRecentSessions().then(setHistory);
+    }
+  }, [view]);
 
   // --- THEME LOGIC ---
   useEffect(() => {
@@ -31,9 +41,18 @@ function App() {
     if (isTracking) {
       await bridge.stopTracking();
       setTracking(false);
+
+      // Save Session Data
+      if (sessionStartTimeRef.current) {
+        const duration = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
+        // Mock score for now (In real app, we'd average the posture scores)
+        await bridge.saveSession(duration, 85 + Math.floor(Math.random() * 15));
+        sessionStartTimeRef.current = null;
+      }
     } else {
       await bridge.startTracking();
       setTracking(true);
+      sessionStartTimeRef.current = Date.now();
     }
   };
 
@@ -126,15 +145,15 @@ function App() {
             {/* The Visualizer Stage */}
             <div className={`lg:col-span-2 rounded-2xl flex flex-col items-center justify-center relative border ${getCardClass()}`}>
               <div className="p-4 w-full h-full flex flex-col items-center justify-center">
-                <PoseOverlay />
+                <PoseOverlay sensitivity={sensitivity} />
               </div>
 
               {/* Floating Action Button */}
               <button
                 onClick={toggleTracking}
                 className={`absolute bottom-6 px-8 py-3 rounded-full font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isTracking
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-green-500 text-black hover:bg-green-400"
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-green-500 text-black hover:bg-green-400"
                   }`}
               >
                 {isTracking ? "Stop Session" : "Start Monitoring"}
@@ -159,14 +178,36 @@ function App() {
           </div>
         )}
 
-        {/* VIEW 2: ANALYTICS (Placeholder) */}
+        {/* VIEW 2: ANALYTICS */}
         {view === 'analytics' && (
           <div className={`p-8 rounded-2xl border ${getCardClass()}`}>
-            <h3 className="text-xl font-bold mb-4">Analytics Dashboard</h3>
-            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-900/20">
-              <History size={48} className="opacity-20 mb-4" />
-              <p className="opacity-60">Session history and posture trends coming in v1.1</p>
-            </div>
+            <h3 className="text-xl font-bold mb-6">Recent Sessions</h3>
+
+            {history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-700/50 rounded-xl bg-gray-900/20">
+                <History size={48} className="opacity-20 mb-4" />
+                <p className="opacity-60">No sessions recorded yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {history.map((session) => (
+                  <div key={session.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:scale-[1.01] ${theme === 'light' ? 'bg-white border-gray-100 hover:shadow-md' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${session.score >= 80 ? 'bg-green-500/20 text-green-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                        {session.score}
+                      </div>
+                      <div>
+                        <div className="font-bold">{session.duration < 60 ? `${session.duration}s` : `${Math.floor(session.duration / 60)}m ${session.duration % 60}s`} Session</div>
+                        <div className="text-xs opacity-50 font-mono">{session.timestamp}</div>
+                      </div>
+                    </div>
+                    <div className="opacity-40">
+                      <Activity size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -176,6 +217,32 @@ function App() {
             <h3 className="text-xl font-bold mb-4">Sensitivity Settings</h3>
             <p className="opacity-60">Adjust how strict the AI judge is.</p>
             {/* We will add sliders here later */}
+            <div className="mt-8">
+              <div className="flex justify-between items-end mb-4">
+                <label className="text-sm font-bold uppercase tracking-wider opacity-80">Sensitivity Level</label>
+                <span className="text-2xl font-mono text-green-500">{sensitivity}</span>
+              </div>
+
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={sensitivity}
+                onChange={(e) => setSensitivity(Number(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500 hover:accent-green-400"
+              />
+
+              <div className="flex justify-between text-xs opacity-40 mt-3 font-mono">
+                <span>RELAXED (25°)</span>
+                <span>BALANCED</span>
+                <span>STRICT (7°)</span>
+              </div>
+
+              <p className="mt-6 text-sm opacity-60 leading-relaxed max-w-lg">
+                Adjust how strict the AI judge is. Lower values allow for more relaxed posture (good for watching movies). Higher values demand upright posture (good for deep work).
+              </p>
+            </div>
           </div>
         )}
 
@@ -186,12 +253,12 @@ function App() {
 
 // --- SUB COMPONENTS ---
 
-const NavItem = ({ icon, label, isActive, onClick, theme }: any) => (
+const NavItem = ({ icon, label, isActive, onClick }: any) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
-        ? 'bg-green-500 text-black font-bold shadow-lg shadow-green-500/20'
-        : `opacity-60 hover:opacity-100 hover:bg-white/5`
+      ? 'bg-green-500 text-black font-bold shadow-lg shadow-green-500/20'
+      : `opacity-60 hover:opacity-100 hover:bg-white/5`
       }`}
   >
     {icon}

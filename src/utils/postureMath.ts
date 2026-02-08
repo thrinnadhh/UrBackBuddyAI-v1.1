@@ -77,14 +77,11 @@ export function analyzePosture(landmarks: Landmark[], sensitivity: number = 5): 
     let message = "Perfect Posture";
 
     // Adjust Threshold based on Sensitivity
-    // Base = 15 deg.
-    // Sensitivity 1: +5 deg tolerance (20 deg limit)
-    // Sensitivity 10: -5 deg tolerance (10 deg limit)
-    // Formula: Base - (Sensitivity - 5)
-    // 1 -> 15 - (-4) = 19
-    // 5 -> 15 - 0 = 15
-    // 10 -> 15 - 5 = 10
-    const adjustedNeckLimit = POSTURE_THRESHOLDS.NECK_ANGLE_LIMIT - (sensitivity - 5);
+    // Sensitivity Formula (Linear):
+    // Level 1 (Relaxed)  -> 25 degrees
+    // Level 10 (Strict)  -> 7 degrees
+    // Formula: Limit = 27 - (2 * sensitivity)
+    const adjustedNeckLimit = 27 - (2 * sensitivity);
 
     // Rule A: Tech Neck (Head is too far forward)
     if (neckAngle > adjustedNeckLimit) {
