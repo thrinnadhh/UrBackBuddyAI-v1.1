@@ -12,7 +12,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Core Tauri
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -25,4 +25,7 @@ image = { version = "0.24", features = ["jpeg", "png", "default"] }
 
 # THE AI BRAIN
 ort = { version = "2.0.0-rc.9", features = ["load-dynamic"] }
+chrono = { version = "0.4", features = ["serde"] }
 ndarray = "0.15"
+tauri-plugin-notification = "2.3.3"
+rodio = "0.21.1"

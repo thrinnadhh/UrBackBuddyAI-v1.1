@@ -27,6 +27,24 @@ export const bridge = {
 
     getRecentSessions: async () => invoke<SessionData[]>("get_recent_sessions"),
 
+    // --- Settings & Logs (NEW) ---
+    saveSetting: async (key: string, value: string) =>
+        invoke<string>("save_setting", { key, value }),
+
+    getSettings: async () => invoke<Record<string, string>>("get_settings"),
+
+    logPrivacyEvent: async (event: string, hash: string) =>
+        invoke<string>("log_privacy_event", { event, hash }),
+
+    getDashboardStats: async () => invoke<DashboardStats>("get_dashboard_stats"),
+
+    // --- Analytics ---
+    getAnalyticsSummary: async () => invoke<AnalyticsSummary>("get_analytics_summary"),
+
+    // --- Alert System ---
+    sendNotification: async (title: string, body: string) => invoke<void>("send_notification", { title, body }),
+    playAlertSound: async () => invoke<void>("play_alert_sound"),
+
     // --- Events ---
     onPoseUpdate: (callback: (landmarks: Landmark[]) => void) => {
         return listen<Landmark[]>("pose_update", (event) => {
@@ -40,4 +58,28 @@ export interface SessionData {
     timestamp: string;
     duration: number;
     score: number;
+}
+
+export interface DashboardStats {
+    current_streak: number;
+    focus_time_today: number;
+    coaching_stage: number;
+}
+
+export interface DailyPoint {
+    date: string;
+    score: number;
+}
+
+export interface HourlyPoint {
+    hour: string;
+    score: number;
+}
+
+export interface AnalyticsSummary {
+    current_streak: number;
+    best_streak: number;
+    total_focus_hours: number;
+    daily_trend: DailyPoint[];
+    hourly_breakdown: HourlyPoint[];
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { bridge } from '../services/bridge';
 import { analyzePosture } from '../utils/postureMath';
+import { useAppStore } from '../stores/useAppStore';
 
 interface PoseOverlayProps {
     onPostureChange?: (isGood: boolean) => void;
@@ -12,8 +13,27 @@ export const PoseOverlay = ({ onPostureChange, sensitivity = 5 }: PoseOverlayPro
     const [status, setStatus] = useState("Waiting for Session Start...");
     const [statusColor, setStatusColor] = useState("bg-zinc-800 text-white");
 
+    // Store Access
+    const { notificationsEnabled, soundEnabled, updateRealtimeStats } = useAppStore();
+
+    // Logic Refs (to avoid stale closures in event listener)
+    const settingsRef = useRef({ notificationsEnabled, soundEnabled });
+    const slouchStartTimeRef = useRef<number | null>(null);
+    const lastAlertTimeRef = useRef<number>(0);
+
+    // Update refs when settings change
+    useEffect(() => {
+        settingsRef.current = { notificationsEnabled, soundEnabled };
+    }, [notificationsEnabled, soundEnabled]);
+
     useEffect(() => {
         const unlistenPromise = bridge.onPoseUpdate((landmarks) => {
+            console.log("Frontend: Frame received", landmarks);
+            if (!landmarks || landmarks.length === 0) {
+                // Optional: Set status to "No Body Detected" if desired
+                // setStatus("No Body Detected");
+            }
+
             const canvas = canvasRef.current;
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
@@ -27,13 +47,36 @@ export const PoseOverlay = ({ onPostureChange, sensitivity = 5 }: PoseOverlayPro
                 onPostureChange(posture.isGood);
             }
 
-            // Pro Max Color Logic: Green for Good, Amber for Warn, Red for Critical
-            let strokeColor = '#10b981'; // Emerald-500
+            // Update Global Store (Realtime)
+            updateRealtimeStats(posture.isGood);
 
+            // --- ALERT LOGIC ---
+            const now = Date.now();
             if (!posture.isGood) {
-                strokeColor = '#ef4444'; // Red-500
+                // User is slouching
+                if (slouchStartTimeRef.current === null) {
+                    slouchStartTimeRef.current = now;
+                } else {
+                    const slouchDuration = now - slouchStartTimeRef.current;
+                    // Trigger alert if slouching > 5s AND debounce > 30s
+                    if (slouchDuration > 5000 && (now - lastAlertTimeRef.current > 30000)) {
+                        const { notificationsEnabled, soundEnabled } = settingsRef.current;
+
+                        if (notificationsEnabled) {
+                            bridge.sendNotification("Bad Posture Detected!", "Sit up straight to protect your back.");
+                        }
+                        if (soundEnabled) {
+                            bridge.playAlertSound();
+                        }
+
+                        lastAlertTimeRef.current = now;
+                    }
+                }
+
                 setStatusColor("bg-red-500 text-white shadow-red-500/50");
             } else {
+                // User is good
+                slouchStartTimeRef.current = null; // Reset timer
                 setStatusColor("bg-emerald-500 text-black shadow-emerald-500/50");
             }
 
@@ -46,11 +89,10 @@ export const PoseOverlay = ({ onPostureChange, sensitivity = 5 }: PoseOverlayPro
             ctx.lineWidth = 4;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.strokeStyle = strokeColor;
-            ctx.fillStyle = strokeColor;
+            ctx.strokeStyle = !posture.isGood ? '#ef4444' : '#10b981';
+            ctx.fillStyle = ctx.strokeStyle;
 
             // 4. Draw Skeleton (Simplified for Aesthetics)
-            // Only drawing upper body for cleaner look
             const connections = [
                 [11, 12], [11, 13], [13, 15], // Arms
                 [12, 14], [14, 16],
@@ -81,7 +123,7 @@ export const PoseOverlay = ({ onPostureChange, sensitivity = 5 }: PoseOverlayPro
         });
 
         return () => { unlistenPromise.then((unlisten) => unlisten()); };
-    }, [onPostureChange]); // Added handled as dependency
+    }, [onPostureChange, sensitivity]);
 
     return (
         <div className="w-full h-full relative flex flex-col items-center justify-center bg-black/40">
