@@ -11,7 +11,6 @@
 <br />
 
 <div align="center">
-  <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjEx.../giphy.gif" alt="UrBackBuddyAI Demo" width="800" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
   
   <p>
     <b>Privacy-First Posture Correction | 3D Gamification | Granular Health Analytics</b>
