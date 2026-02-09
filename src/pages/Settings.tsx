@@ -176,6 +176,20 @@ export default function Settings() {
                                     Higher values will alert you to smaller deviations in posture.
                                 </p>
                             </div>
+
+                            {/* EMERGENCY RESET */}
+                            <div className="pt-6 border-t border-white/5 space-y-4">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-white font-medium">Camera Troubleshoot</span>
+                                    <span className="text-white/40 text-xs">If the camera gets stuck or fails to start, force a full system reload.</span>
+                                </div>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all text-sm font-bold tracking-wide uppercase flex items-center justify-center gap-2"
+                                >
+                                    <Shield size={16} /> Force System Restart
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );

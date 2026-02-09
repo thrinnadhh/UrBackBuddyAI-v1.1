@@ -99,7 +99,10 @@ impl PoseEngine {
         // 3. Create Tensor from (Shape, Data) Tuple
         // Shape is now [1, 256, 256, 3]
         let input_tensor = Tensor::from_array(([1, 256, 256, 3], input_data))
-             .map_err(|e| format!("Tensor creation failed: {}", e))?;
+             .map_err(|e| {
+                 println!("❌ Tensor Creation Failed: {}", e);
+                 format!("Tensor creation failed: {}", e)
+             })?;
 
         // 4. Run Inference
         // DYNAMIC INPUT NAME FIX:
@@ -107,17 +110,21 @@ impl PoseEngine {
         let input_name = session.inputs()[0].name().to_string();
         let output_name = session.outputs()[0].name().to_string();
         
-        // println!("🧠 DEBUG: Input: {}, Output: {}", input_name, output_name); 
-
         let inputs = ort::inputs![input_name.as_str() => input_tensor];
         let outputs = session.run(inputs)
-            .map_err(|e| format!("Inference failed: {}", e))?;
+            .map_err(|e| {
+                println!("❌ Session Run Failed: {}", e);
+                format!("Inference failed: {}", e)
+            })?;
 
         // 5. Extract Output
         // try_extract_tensor returns (Shape, DataSlice) in v2.0
         
         let output_tuple = outputs[output_name.as_str()].try_extract_tensor::<f32>()
-            .map_err(|e| format!("Extraction failed: {}", e))?;
+            .map_err(|e| {
+                println!("❌ Tensor Extraction Failed: {}", e);
+                format!("Extraction failed: {}", e)
+            })?;
         
         let data = output_tuple.1; // Access the data slice directly (Index 1 of tuple)
 
