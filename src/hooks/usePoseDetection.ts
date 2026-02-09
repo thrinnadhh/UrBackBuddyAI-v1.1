@@ -1,190 +1,116 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
-// Register WebGL backend
 import '@tensorflow/tfjs-backend-webgl';
 
-import { analyzePosture, PostureResult } from '../utils/postureMath';
+import { calculatePostureMetrics, PostureMetrics } from '../utils/postureMath';
 
-
-/**
- * Hook for managing pose detection camera stream AND TensorFlow.js detection loop.
- * Now handles both camera lifecycle and AI inference.
- */
 export const usePoseDetection = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
-    const loopRef = useRef<number | null>(null);
-    const [isDetectorReady, setIsDetectorReady] = useState(false);
+    const rafId = useRef<number | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const lastUpdate = useRef<number>(0);
 
-    // Exposed State
-    const [posture, setPosture] = useState<PostureResult | null>(null);
-    const [landmarks, setLandmarks] = useState<any[]>([]); // Using any for TFJS keypoints
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [postureState, setPostureState] = useState<PostureMetrics>({
+        total: 100, neck: 100, shoulders: 100, spine: 100, isGood: true
+    });
 
-    useEffect(() => {
-        const loadModel = async () => {
-            try {
-                console.log("⏳ Initializing TensorFlow.js Backend...");
+    const stopTracking = useCallback(() => {
+        if (rafId.current) {
+            cancelAnimationFrame(rafId.current);
+            rafId.current = null;
+        }
 
-                // FORCE WEBGL BACKEND
-                await tf.setBackend('webgl');
-                await tf.ready();
+        // CRITICAL: Stop all hardware tracks
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => {
+                track.stop();
+            });
+            streamRef.current = null;
+        }
 
-                console.log("✅ TensorFlow Ready. Backend:", tf.getBackend());
-
-                console.log("⏳ Loading MoveNet Model...");
-                // Race condition: Timeout after 10 seconds
-                const modelPromise = poseDetection.createDetector(
-                    poseDetection.SupportedModels.MoveNet,
-                    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-                );
-
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error("Model Load Timeout (10s)")), 10000)
-                );
-
-                const detector = await Promise.race([modelPromise, timeoutPromise]) as poseDetection.PoseDetector;
-
-                detectorRef.current = detector;
-                setIsDetectorReady(true);
-                console.log("🧠 MoveNet Model Loaded (Lightning)");
-            } catch (err) {
-                console.error("🚨 Model Loading Failed:", err);
-                alert(`AI Model Error: ${err}`);
-            }
-        };
-        loadModel();
-    }, []);
-
-    const startTracking = async () => {
-        console.log("📸 Requesting Camera Access...");
-        // 1. HARD RESET
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(t => t.stop());
+        if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
+        setIsAnalyzing(false);
+    }, []);
 
-        try {
-            // 2. CAMERA INIT
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 640, height: 480, facingMode: "user" },
-                audio: false
-            });
-            console.log("✅ Camera Stream Acquired");
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                console.log("🔗 Attaching stream to video element...");
-
-                await new Promise<void>((resolve) => {
-                    if (videoRef.current) {
-                        videoRef.current.onloadedmetadata = () => {
-                            console.log("🎥 Video Metadata Loaded");
-                            videoRef.current!.play().then(() => {
-                                console.log("▶️ Video Playing");
-                                resolve();
-                            });
-                        };
-                    }
-                });
-
-                // 3. START DETECTION LOOP
-                console.log("🔄 Starting Detection Loop");
-                detectLoop();
-                return true;
-            } else {
-                console.error("❌ Video Ref is null during startTracking");
-            }
-            return false;
-        } catch (error) {
-            console.error("🚨 CAMERA START ERROR:", error);
-            let msg = "Unknown Camera Error";
-            if (error instanceof DOMException) {
-                if (error.name === "NotAllowedError") msg = "Camera Access Denied.";
-                else if (error.name === "OverconstrainedError") msg = "Resolution Mismatch.";
-                else msg = `Camera Error: ${error.name}`;
-            }
-            alert(msg);
-            return false;
-        }
-    };
-
-    const lastUpdate = useRef(0); // THROTTLE: Track last state update time
-
-    const detectLoop = async () => {
+    const detect = async () => {
         if (!detectorRef.current || !videoRef.current || videoRef.current.readyState < 2) {
-            loopRef.current = requestAnimationFrame(detectLoop);
+            rafId.current = requestAnimationFrame(detect);
             return;
         }
 
         try {
             const poses = await detectorRef.current.estimatePoses(videoRef.current);
-
-            if (poses.length > 0) {
-                const pose = poses[0];
-
-                // DYNAMIC RESOLUTION: Safe Check
-                const vWidth = videoRef.current.videoWidth || 640;
-                const vHeight = videoRef.current.videoHeight || 480;
-
-                if (vWidth === 0 || vHeight === 0) {
-                    console.warn("⚠️ Video dimensions 0, skipping frame");
-                    loopRef.current = requestAnimationFrame(detectLoop);
-                    return;
-                }
-
-                // Convert TFJS Keypoints to Bridge/App format if matched
-                const mappedLandmarks = pose.keypoints.map(kp => ({
-                    x: kp.x / vWidth,
-                    y: kp.y / vHeight,
-                    z: 0,
-                    visibility: kp.score || 0
-                }));
-
-                const result = analyzePosture(mappedLandmarks, 5);
-
-                // THROTTLE: Only update React State every 100ms (10fps for UI is plenty)
+            if (poses && poses.length > 0) {
                 const now = Date.now();
+                // Throttle: 100ms
                 if (now - lastUpdate.current > 100) {
-                    // DEBUG LOG: Prove we are calculating new numbers
-                    console.log(`📊 STATS UPDATE: Score ${result.score} | Neck ${result.metrics.neck} | Tilt Head to test!`);
-
-                    setPosture({ ...result });
-                    setLandmarks([...mappedLandmarks]);
+                    const metrics = calculatePostureMetrics(poses[0].keypoints);
+                    setPostureState(metrics);
                     lastUpdate.current = now;
                 }
-            } else {
-                setPosture(null);
-                setLandmarks([]);
             }
-
-        } catch (error) {
-            console.error("🔥 Detection Loop Crashed:", error);
+        } catch (e) {
+            console.error("Pose Detection Error:", e);
         }
 
-        loopRef.current = requestAnimationFrame(detectLoop);
+        rafId.current = requestAnimationFrame(detect);
     };
 
-    const stopTracking = () => {
-        if (loopRef.current) cancelAnimationFrame(loopRef.current);
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(t => t.stop());
-            videoRef.current.srcObject = null;
+    const startTracking = async () => {
+        await stopTracking(); // Safety clear
+
+        // Load Model if needed
+        if (!detectorRef.current) {
+            await tf.setBackend('webgl');
+            await tf.ready();
+            detectorRef.current = await poseDetection.createDetector(
+                poseDetection.SupportedModels.MoveNet,
+                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+            );
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 640, height: 480, facingMode: 'user' },
+                audio: false
+            });
+            streamRef.current = stream;
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadeddata = () => {
+                    videoRef.current?.play();
+                    setIsAnalyzing(true);
+                    detect();
+                };
+            }
+        } catch (err) {
+            console.error("Camera Init Error:", err);
+            setIsAnalyzing(false);
         }
     };
 
+    const toggleAnalysis = () => {
+        if (isAnalyzing) stopTracking();
+        else startTracking();
+    };
+
+    // Cleanup on unmount
     useEffect(() => {
-        return () => stopTracking();
-    }, []);
+        return () => {
+            stopTracking();
+        };
+    }, [stopTracking]);
 
     return {
         videoRef,
-        startTracking,
-        stopTracking,
-        posture, // Expose current posture result
-        landmarks, // Expose raw landmarks for drawing
-        isReady: isDetectorReady
+        postureState,
+        isAnalyzing,
+        toggleAnalysis
     };
 };

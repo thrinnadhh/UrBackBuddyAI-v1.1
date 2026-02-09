@@ -102,15 +102,14 @@ export const useAppStore = create<AppState>((set) => ({
     setTracking: (isTracking) => set({ isTracking }),
     incrementSessionTime: () => set((state) => ({ sessionTime: state.sessionTime + 1 })),
     setPostureScore: (score) => set({ postureScore: score }),
-    updateRealtimeStats: (result) => set((state) => {
+    updateRealtimeStats: (result: any) => set((state) => {
         if (!state.isTracking) return {};
 
         // If simple boolean passed (legacy support or check), handle gracefully
-        // But we expect the full PostureResult now.
-        const isGood = typeof result === 'boolean' ? result : result.isGood;
-        const currentMetrics = (typeof result === 'object' && result.metrics) ? result.metrics : { neck: 100, shoulders: 100, spine: 100 };
-        const newScore = (typeof result === 'object' && result.score !== undefined) ? result.score : (isGood ? 100 : 60);
-        const currentCorrections = (typeof result === 'object' && result.corrections) ? result.corrections : [];
+        const isGood = typeof result === 'boolean' ? result : (result.isGood ?? true);
+        const currentMetrics = (typeof result === 'object' && result?.metrics) ? result.metrics : { neck: 100, shoulders: 100, spine: 100 };
+        const newScore = (typeof result === 'object' && result?.score !== undefined) ? result.score : (isGood ? 100 : 60);
+        const currentCorrections = (typeof result === 'object' && result?.corrections) ? result.corrections : [];
 
         let { postureScore, momentum, slouchTime, metrics } = state;
 
