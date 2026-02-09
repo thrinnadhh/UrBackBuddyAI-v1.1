@@ -1,105 +1,74 @@
-import { Landmark } from "../services/bridge";
+/**
+ * postureMath.ts
+ * The Brain: Calculates posture metrics from TensorFlow/MoveNet keypoints.
+ */
 
-// Configuration for Sensitivity
-export const POSTURE_THRESHOLDS = {
-    NECK_ANGLE_LIMIT: 15, // Degrees (Above this = Slouching)
-    TORSO_ANGLE_LIMIT: 10, // Degrees (Leaning too far forward/back)
-};
-
-export interface PostureResult {
+export interface PostureMetrics {
+    total: number;
+    neck: number;
+    shoulders: number;
+    spine: number;
     isGood: boolean;
-    neckAngle: number;
-    torsoAngle: number;
-    message: string;
 }
 
-/**
- * The Core Logic: Determines if the user is slouching.
- * * Strategy:
- * 1. Find the midpoint between shoulders (Upper Back).
- * 2. Compare Nose position relative to Shoulders (Neck Forward Tilt).
- * 3. Compare Shoulders relative to Hips (Torso Lean).
- * 
- * Sensitivity (1-10):
- * - 1: Low Sensitivity (Relaxed, allows more slouching)
- * - 5: Medium (Standard)
- * - 10: High Sensitivity (Strict)
- */
-export function analyzePosture(landmarks: Landmark[], sensitivity: number = 5): PostureResult {
-    // 1. Extract Key Points (MediaPipe Indices)
-    const nose = landmarks[0];
-    const leftShoulder = landmarks[11];
-    const rightShoulder = landmarks[12];
-    const leftHip = landmarks[23];
-    const rightHip = landmarks[24];
-    const leftEar = landmarks[7];
-    const rightEar = landmarks[8];
+export function calculatePostureMetrics(keypoints: any[]): PostureMetrics {
+    // Safety Fallback
+    const fallback = { total: 0, neck: 0, shoulders: 0, spine: 0, isGood: false };
+    if (!keypoints || keypoints.length === 0) return fallback;
 
-    // Safety Check: Ensure we have all points with good visibility
-    if (!nose || !leftShoulder || !rightShoulder || !leftEar) {
-        return { isGood: true, neckAngle: 0, torsoAngle: 0, message: "No User Detected" };
+    const findKp = (name: string) => keypoints.find((kp: any) => kp.name === name);
+
+    const nose = findKp('nose');
+    const leftEar = findKp('left_ear');
+    const rightEar = findKp('right_ear');
+    const leftShoulder = findKp('left_shoulder');
+    const rightShoulder = findKp('right_shoulder');
+    const leftHip = findKp('left_hip');
+    const rightHip = findKp('right_hip');
+
+    // Missing crucial points? Return bad score to allow UI to prompt user
+    if (!nose || !leftEar || !rightEar || !leftShoulder || !rightShoulder) {
+        return fallback;
     }
 
-    // 2. Calculate Midpoints
-    const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
-    const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+    // --- FORMULAS ---
 
-    const earMidX = (leftEar.x + rightEar.x) / 2;
-    const earMidY = (leftEar.y + rightEar.y) / 2;
+    // 1. Neck: Vertical alignment of ears vs shoulders (simplified pixel delta)
+    // Formula: 100 - abs(ear.x - shoulder.x) * 2
+    const earX = (leftEar.x + rightEar.x) / 2;
+    const shoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+    let neck = 100 - Math.abs(earX - shoulderX) * 2;
 
-    const hipMidX = (leftHip.x + rightHip.x) / 2;
-    const hipMidY = (leftHip.y + rightHip.y) / 2;
+    // 2. Shoulders: Levelness check
+    // Formula: 100 - abs(leftShoulder.y - rightShoulder.y) * 4
+    let shoulders = 100 - Math.abs(leftShoulder.y - rightShoulder.y) * 4;
 
-    // 3. Calculate Neck Angle (Vertical vs. Ear-Shoulder Line)
-    // A perfect neck is vertical (90 degrees relative to ground, or 0 deviation).
-    // We calculate the deviation from the vertical axis.
-    // Note: Y increases downwards in canvas/image coordinates.
-    // dy is negative if ear is above shoulder. using abs(atan2) helps normalize.
-    const dy = shoulderMidY - earMidY;
-    const dx = shoulderMidX - earMidX;
-
-    // Angle in degrees relative to horizontal (0 is right, 90 is down, -90 is up)
-    let rawAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-    // We expect the neck to be roughly vertical (around 90 degrees or -90 depending on orientation)
-    // Here we want deviation from vertical (90 degrees).
-    let neckAngle = Math.abs(Math.abs(rawAngle) - 90);
-
-    // 4. Calculate Torso Angle (Lean)
-    // Deviation of the Shoulder-Hip line from vertical
-    const torsoDy = hipMidY - shoulderMidY;
-    const torsoDx = hipMidX - shoulderMidX;
-    let rawTorsoAngle = Math.atan2(torsoDy, torsoDx) * (180 / Math.PI);
-    let torsoAngle = Math.abs(Math.abs(rawTorsoAngle) - 90);
-
-    // 5. The Verdict
-    let isGood = true;
-    let message = "Perfect Posture";
-
-    // Adjust Threshold based on Sensitivity
-    // Sensitivity Formula (Linear):
-    // Level 1 (Relaxed)  -> 25 degrees
-    // Level 10 (Strict)  -> 7 degrees
-    // Formula: Limit = 27 - (2 * sensitivity)
-    const adjustedNeckLimit = 27 - (2 * sensitivity);
-
-    // Rule A: Tech Neck (Head is too far forward)
-    if (neckAngle > adjustedNeckLimit) {
-        isGood = false;
-        message = "Lift Your Head!";
+    // 3. Spine: Forward lean (Nose vs Hips)
+    // Formula: 100 - abs(nose.x - hip.x) * 2
+    let spine = 100;
+    if (leftHip && rightHip) {
+        const hipsX = (leftHip.x + rightHip.x) / 2;
+        spine = 100 - Math.abs(nose.x - hipsX) * 2;
+    } else {
+        // Fallback to shoulders if hips are off-screen (webcam close-up)
+        spine = shoulders;
     }
 
-    // Rule B: Slouching (Leaning back/forward too much)
-    if (torsoAngle > POSTURE_THRESHOLDS.TORSO_ANGLE_LIMIT) {
-        isGood = false;
-        // Optimization: Distinguish forward vs backward lean could be done here if needed
-        message = "Sit Up Straight!";
-    }
+    // --- CLAMPING ---
+    const clamp = (v: number) => Math.min(Math.max(v, 0), 100);
+    neck = clamp(neck);
+    shoulders = clamp(shoulders);
+    spine = clamp(spine);
+
+    // --- TOTAL WEIGHTED ---
+    // Neck is most important for "text neck"
+    const total = (neck * 0.4) + (spine * 0.4) + (shoulders * 0.2);
 
     return {
-        isGood,
-        neckAngle: Math.round(neckAngle),
-        torsoAngle: Math.round(torsoAngle),
-        message
+        total: Math.round(total),
+        neck: Math.round(neck),
+        shoulders: Math.round(shoulders),
+        spine: Math.round(spine),
+        isGood: total > 80 // Strict threshold
     };
 }

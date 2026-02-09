@@ -8,9 +8,45 @@ import Settings from './pages/Settings';
 
 import { useEffect } from 'react';
 import { bridge } from './services/bridge';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 function App() {
   useEffect(() => {
+    // FAIL-SAFE: Ensure camera is killed on window close
+    let unlistenFn: (() => void) | undefined;
+
+    const setupCleanup = async () => {
+      try {
+        // Only attempt if running in Tauri environment
+        // @ts-ignore
+        if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+          unlistenFn = await getCurrentWindow().onCloseRequested(async () => {
+            console.log("Win Close Req: Killing Camera...");
+
+            // 1. Force kill any active stream in DOM
+            const videos = document.querySelectorAll('video');
+            videos.forEach(v => {
+              if (v.srcObject) {
+                const stream = v.srcObject as MediaStream;
+                stream.getTracks().forEach(t => t.stop());
+              }
+            });
+
+            // 2. Tell Backend
+            await bridge.killCamera();
+          });
+        }
+      } catch (err) {
+        console.warn("Tauri API not available (Browser Mode?):", err);
+      }
+    };
+
+    setupCleanup();
+
+    return () => {
+      if (unlistenFn) unlistenFn();
+    };
+
     const bootSequence = async () => {
       console.log("🚀 Booting System...");
 

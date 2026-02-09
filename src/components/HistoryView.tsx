@@ -1,7 +1,7 @@
-import { SessionData } from '../services/bridge';
+import { SessionSummary } from '../services/bridge';
 
 interface HistoryViewProps {
-    data: SessionData[];
+    data: SessionSummary[];
     isLoading: boolean;
 }
 
@@ -42,17 +42,17 @@ export const HistoryView = ({ data, isLoading }: HistoryViewProps) => {
                         <div className="divide-y divide-white/5">
                             {data.map((session) => (
                                 <div key={session.id} className="grid grid-cols-4 gap-4 p-4 hover:bg-white/5 transition-colors items-center text-sm">
-                                    <div className="text-white/80">{formatDate(session.timestamp)}</div>
-                                    <div className="font-mono text-white/60">{formatTime(session.duration)}</div>
-                                    <div className={`font-bold ${session.score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                        {session.score}
+                                    <div className="text-white/80">{formatDate(session.start_time)}</div>
+                                    <div className="font-mono text-white/60">{formatTime(session.duration_sec)}</div>
+                                    <div className={`font-bold ${session.avg_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                        {session.avg_score}
                                     </div>
                                     <div>
-                                        <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wide ${session.score >= 80
-                                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                        <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wide ${session.avg_score >= 80
+                                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                             }`}>
-                                            {session.score >= 80 ? 'Good' : 'Improve'}
+                                            {session.avg_score >= 80 ? 'Good' : 'Improve'}
                                         </span>
                                     </div>
                                 </div>

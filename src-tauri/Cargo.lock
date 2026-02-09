@@ -4849,6 +4849,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "uuid",
 ]
 
 [[package]]
